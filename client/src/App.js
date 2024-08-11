@@ -19,32 +19,42 @@ const LoginRegister = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
       if (firebaseUser) {
         try {
-          const idToken = await firebaseUser.getIdToken();
-          
-          const response = await axios.post("http://localhost:5000/auth/firebase-login", {
+          const idToken = await firebaseUser.getIdToken();      
+
+          await axios.post("http://localhost:5000/auth/firebase-login", {
             idToken,
-          });
-          
-          const userData = response.data.user;
-          
-          // Fetch the user's photo from Firebase Storage
-          if (userData.uid) {
-            try {
-              const photoUrl = await getDownloadURL(ref(storage, `user_photos/${userData.uid}`));
-              userData.picture = photoUrl;
-            } catch (error) {
-              console.log("No custom photo found for user, using default if available");
-              // If no custom photo, use the one from the provider if available
-              if (firebaseUser.photoURL) {
-                userData.picture = firebaseUser.photoURL;
+          }).then(async(response) => {
+            setLoading(false);
+            const userData = response.data.user;
+            
+            // Fetch the user's photo from Firebase Storage
+            if (userData.uid && (firebaseUser.providerData[0].providerId === 'microsoft.com' || firebaseUser.providerData[0].providerId === 'facebook.com')) {
+              try {
+                const photoUrl = await getDownloadURL(ref(storage, `user_photos/${userData.uid}`));
+                userData.picture = photoUrl;
+              } catch (error) {
+                console.log("No custom photo found for user, using default if available");
+                // If no custom photo, use the one from the provider if available
+                if (firebaseUser.photoURL) {
+                  userData.picture = firebaseUser.photoURL;
+                }
               }
             }
-          }
+            
+            if (firebaseUser.providerData[0].providerId !== 'microsoft.com' &&
+              firebaseUser.providerData[0].providerId !== 'facebook.com' &&
+              firebaseUser.providerData[0].providerId !== 'google.com' && 
+              firebaseUser.providerData[0].providerId !== 'github.com' && !userData.emailVerified) {
+              setError("Please verify your email before signing in.");
+              return;
+            }
 
-          setUser(userData);
-          console.log("User signed in:", userData);
+            setUser(userData);
+            console.log("User signed in:", userData);
+          });          
         } catch (error) {
           console.error("Error fetching user data:", error);
           setError("Failed to fetch user data. Please try logging in again.");
@@ -77,6 +87,7 @@ const LoginRegister = () => {
         photoURL = await getDownloadURL(storageRef);
       }
 
+      await new Promise(resolve => setTimeout(resolve, 500)); 
       const response = await axios.post("http://localhost:5000/auth/register", {
           email,
           password,
@@ -114,6 +125,7 @@ const LoginRegister = () => {
         setError(null);
         setVerificationSent(false);
 
+        await new Promise(resolve => setTimeout(resolve, 500)); 
         const response = await axios.post("http://localhost:5000/auth/login", { email, password });
         const { firebase_token, user } = response.data;
 
@@ -215,20 +227,24 @@ const LoginRegister = () => {
         
         // Upload the photo to Firebase Storage
         if (photoUrl) {
+          await new Promise(resolve => setTimeout(resolve, 500)); 
           await uploadPhotoToFirebase(result.user.uid, photoUrl);
         }
-
+        
+        await new Promise(resolve => setTimeout(resolve, 500));         
         const response = await axios.post("http://localhost:5000/auth/firebase-login", {
             idToken,
         });
                 
         const userData = response.data.user;
+
         if (photoUrl) {
           userData.picture = photoUrl;
         }
 
         setUser(userData);
-        console.log("User signed in with OAuth:", userData);
+        console.log("User signed in with OAuth:", userData);            
+
     } catch (error) {
         console.error("Error during OAuth sign in:", error.response?.data?.detail || error.message);
         setError(error.response?.data?.detail || error.message);
